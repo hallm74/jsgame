@@ -3,6 +3,31 @@ import { generateHint } from './aiHints.js';
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
+// Make canvas responsive
+function resizeCanvas() {
+  const container = document.getElementById('game-panel');
+  const maxWidth = Math.min(800, window.innerWidth - 32);
+  const maxHeight = Math.min(500, (window.innerHeight - 200));
+  const aspectRatio = 800 / 500;
+  
+  let width = maxWidth;
+  let height = width / aspectRatio;
+  
+  if (height > maxHeight) {
+    height = maxHeight;
+    width = height * aspectRatio;
+  }
+  
+  canvas.width = width;
+  canvas.height = height;
+  
+  // Adjust player position if needed
+  if (state.player) {
+    state.player.x = Math.min(state.player.x, canvas.width - state.player.r);
+    state.player.y = Math.min(state.player.y, canvas.height - state.player.r);
+  }
+}
+
 // --- Game State ---
 const state = {
   running: true,
@@ -15,7 +40,18 @@ const state = {
   inputs: { up: false, down: false, left: false, right: false },
   pickups: [],
   hazards: [],
+  touch: {
+    active: false,
+    startX: 0,
+    startY: 0,
+    currentX: 0,
+    currentY: 0,
+    identifier: null
+  }
 };
+
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
 
 // --- Entity Generation ---
 function spawnPickup() {
@@ -71,6 +107,61 @@ window.addEventListener('keyup', (e) => {
   }
 });
 
+// --- Touch Controls ---
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  if (state.touch.active) return;
+  
+  const touch = e.changedTouches[0];
+  const rect = canvas.getBoundingClientRect();
+  
+  state.touch.active = true;
+  state.touch.identifier = touch.identifier;
+  state.touch.startX = touch.clientX - rect.left;
+  state.touch.startY = touch.clientY - rect.top;
+  state.touch.currentX = state.touch.startX;
+  state.touch.currentY = state.touch.startY;
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  if (!state.touch.active) return;
+  
+  for (let touch of e.changedTouches) {
+    if (touch.identifier === state.touch.identifier) {
+      const rect = canvas.getBoundingClientRect();
+      state.touch.currentX = touch.clientX - rect.left;
+      state.touch.currentY = touch.clientY - rect.top;
+      break;
+    }
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  for (let touch of e.changedTouches) {
+    if (touch.identifier === state.touch.identifier) {
+      state.touch.active = false;
+      state.touch.identifier = null;
+      state.inputs.up = false;
+      state.inputs.down = false;
+      state.inputs.left = false;
+      state.inputs.right = false;
+      break;
+    }
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchcancel', (e) => {
+  e.preventDefault();
+  state.touch.active = false;
+  state.touch.identifier = null;
+  state.inputs.up = false;
+  state.inputs.down = false;
+  state.inputs.left = false;
+  state.inputs.right = false;
+}, { passive: false });
+
 // --- Hint System ---
 const hintBtn = document.getElementById('hint-btn');
 const hintOutput = document.getElementById('hint-output');
@@ -111,12 +202,32 @@ function updateDifficulty() {
 function movePlayer(dt) {
   const p = state.player;
   let vx = 0, vy = 0;
-  if (state.inputs.up) vy -= 1;
-  if (state.inputs.down) vy += 1;
-  if (state.inputs.left) vx -= 1;
-  if (state.inputs.right) vx += 1;
-  const mag = Math.hypot(vx, vy) || 1;
-  vx /= mag; vy /= mag;
+  
+  // Handle touch input
+  if (state.touch.active) {
+    const dx = state.touch.currentX - state.touch.startX;
+    const dy = state.touch.currentY - state.touch.startY;
+    const deadzone = 5;
+    
+    if (Math.abs(dx) > deadzone || Math.abs(dy) > deadzone) {
+      vx = dx;
+      vy = dy;
+      const mag = Math.hypot(vx, vy);
+      if (mag > 0) {
+        vx /= mag;
+        vy /= mag;
+      }
+    }
+  } else {
+    // Handle keyboard input
+    if (state.inputs.up) vy -= 1;
+    if (state.inputs.down) vy += 1;
+    if (state.inputs.left) vx -= 1;
+    if (state.inputs.right) vx += 1;
+    const mag = Math.hypot(vx, vy) || 1;
+    vx /= mag; vy /= mag;
+  }
+  
   p.x += vx * p.speed * dt;
   p.y += vy * p.speed * dt;
   p.x = Math.max(p.r, Math.min(canvas.width - p.r, p.x));
@@ -219,6 +330,22 @@ function draw() {
   ctx.beginPath();
   ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
   ctx.fill();
+
+  // Draw touch joystick
+  if (state.touch.active) {
+    ctx.globalAlpha = 0.3;
+    ctx.strokeStyle = '#58a6ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(state.touch.startX, state.touch.startY, 40, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    ctx.fillStyle = '#58a6ff';
+    ctx.beginPath();
+    ctx.arc(state.touch.currentX, state.touch.currentY, 15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
 
   // Difficulty indicator
   ctx.font = '14px monospace';
