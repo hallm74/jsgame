@@ -6,9 +6,9 @@ const ctx = canvas.getContext('2d');
 // Make canvas responsive
 function resizeCanvas() {
   const container = document.getElementById('game-panel');
-  const maxWidth = Math.min(800, window.innerWidth - 32);
-  const maxHeight = Math.min(500, (window.innerHeight - 200));
-  const aspectRatio = 800 / 500;
+  const maxWidth = Math.min(400, window.innerWidth - 32);
+  const maxHeight = Math.min(700, (window.innerHeight - 180));
+  const aspectRatio = 400 / 700;
   
   let width = maxWidth;
   let height = width / aspectRatio;
@@ -36,7 +36,7 @@ const state = {
   elapsed: 0,
   lastTime: performance.now(),
   difficulty: 1,
-  player: { x: 400, y: 250, r: 16, speed: 220 },
+  player: { x: 200, y: 350, r: 16, speed: 180 },
   inputs: { up: false, down: false, left: false, right: false },
   pickups: [],
   hazards: [],
@@ -207,15 +207,20 @@ function movePlayer(dt) {
   if (state.touch.active) {
     const dx = state.touch.currentX - state.touch.startX;
     const dy = state.touch.currentY - state.touch.startY;
-    const deadzone = 5;
+    const deadzone = 8;
+    const sensitivity = 0.015; // Lower = smoother, less sensitive
+    const maxDistance = 80; // Maximum joystick distance for scaling
     
     if (Math.abs(dx) > deadzone || Math.abs(dy) > deadzone) {
+      const distance = Math.hypot(dx, dy);
+      const scale = Math.min(distance / maxDistance, 1.0);
+      
       vx = dx;
       vy = dy;
       const mag = Math.hypot(vx, vy);
       if (mag > 0) {
-        vx /= mag;
-        vy /= mag;
+        vx = (vx / mag) * scale;
+        vy = (vy / mag) * scale;
       }
     }
   } else {
@@ -333,17 +338,32 @@ function draw() {
 
   // Draw touch joystick
   if (state.touch.active) {
-    ctx.globalAlpha = 0.3;
-    ctx.strokeStyle = '#58a6ff';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(state.touch.startX, state.touch.startY, 40, 0, Math.PI * 2);
-    ctx.stroke();
-    
+    // Outer circle
+    ctx.globalAlpha = 0.25;
     ctx.fillStyle = '#58a6ff';
     ctx.beginPath();
-    ctx.arc(state.touch.currentX, state.touch.currentY, 15, 0, Math.PI * 2);
+    ctx.arc(state.touch.startX, state.touch.startY, 60, 0, Math.PI * 2);
     ctx.fill();
+    
+    // Border
+    ctx.globalAlpha = 0.5;
+    ctx.strokeStyle = '#58a6ff';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(state.touch.startX, state.touch.startY, 60, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    // Inner stick
+    ctx.globalAlpha = 0.8;
+    ctx.fillStyle = '#58a6ff';
+    ctx.beginPath();
+    ctx.arc(state.touch.currentX, state.touch.currentY, 20, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Stick border
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
     ctx.globalAlpha = 1;
   }
 
